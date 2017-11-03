@@ -1,0 +1,29 @@
+#!/usr/bin/env python
+#######################################################################
+# Script for cluster expansion monte carlo
+#######################################################################
+
+import os
+import Vasp as vp
+import CELib
+import random as rd
+import argparse
+import copy
+import time
+
+parser = argparse.ArgumentParser(description = 'Script for running CEMC.');
+parser.add_argument('-des', action='store', dest="ClusterDes", required=True, \
+        help='Tell the description of each cluster');
+parser.add_argument('--ConfF', action='store', dest="ConfFile", \
+        default = "ConfFile", \
+        help=textwrap.dedent('''The format of ConfFile will contain certain row of
+        data while each row will contain the configuration name and corresponding 
+        total energy.
+        '''));
+parser.add_argument('--Ref', action='store', dest="Ref",\
+        default = "POSCAR_Primary", help='Reference lattice')
+options=parser.parse_args();
+
+ClusterDes = eval(options.ClusterDes); ConfF = options.ConfF;
+Ref = options.Ref;
+

@@ -1,0 +1,34 @@
+#!/usr/bin/env python
+#######################################################################
+# Find effective clusters in a given lattice
+#######################################################################
+
+import os
+import Vasp as vp
+import CELib
+import argparse,textwrap
+import copy
+import MathKit
+
+__author__ = 'Bin Ouyang';
+
+parser = argparse.ArgumentParser(description = 'Script for running CEMC.',
+        formatter_class=argparse.RawTextHelpFormatter);
+parser.add_argument('-Sub', action='store', dest="SubLatt", required=True, \
+        help=textwrap.dedent('''Tell projection of sublattice with respect
+to reference lattice. We are expecting something like 
+"[[0,1],[2,3],[4,5]]", which tells the code that we have two 
+types of atoms for each of the three sublattices'''));
+parser.add_argument('--NCut', action='store', dest="NCut",default = 3,\
+        help='The cutoff of cluster size (default: 3)');
+parser.add_argument('--Ref', action='store', dest="Ref",\
+        default = "POSCAR_Primary", help='Reference lattice (default: POSCAR_Primary)');
+options=parser.parse_args();
+
+
+SubLatt = eval(options.SubLatt); NCut = options.NCut; Ref = options.Ref;
+
+POSRef = vp.posreader(Ref); NSubLatt = POSRef['EleNum'];
+
+POSRef = vp.dismatcreate(POSRef);
+ClusterSum,ClusterNum,ClusterDesLst = CELib.CEFind(SubLatt,POSRef,NCut,1);

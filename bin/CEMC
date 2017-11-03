@@ -1,0 +1,132 @@
+#!/usr/bin/env python
+#######################################################################
+# Script for cluster expansion monte carlo
+#######################################################################
+
+import os
+import Vasp as vp
+import CELib
+import random as rd
+import argparse
+import copy
+import time
+import math
+
+__author__ = 'Bin Ouyang';
+
+parser = argparse.ArgumentParser(description = 'Script for running CEMC.');
+parser.add_argument('-des', action='store', dest="ClusterDes", required=True, \
+        help='Tell the description of each cluster');
+parser.add_argument('-coef', action='store', dest="ClusterCoef", required=True, \
+        help='Tell the coefficient fitted for cluster expansion');
+parser.add_argument('-t', action='store', dest="Temp", required=True, \
+        help='Tell the temperature of the simulation');
+parser.add_argument('--GrpLst',action='store', dest='GrpLst', default = "[[1,2],[3,4]]", \
+        help='group the sublattices with swap possibilities (default: [[1,2],[3,4]])');
+parser.add_argument('--N', action='store', dest='NLst', default="[20,1500,500]", \
+        help='Tell the number of iterations required, 1st: outer loop, \
+        2st: inner loop; 3st: step size of outputting structure (default: [20,1500,500])');
+parser.add_argument('--bias', action='store', dest="Bias", default=0.0,\
+        help='Tell the bias parameter (default: 0.0)');
+parser.add_argument('--ini', action='store', dest="InitConf", default="POSCAR_Primary", \
+        help='Starting Configuration (default: POSCAR_Primary)');
+options=parser.parse_args();
+
+
+ClusterDes = eval(options.ClusterDes); ClusterCoef = eval(options.ClusterCoef);
+Temp = eval(options.Temp); InitConf = options.InitConf;
+GrpLst = eval(options.GrpLst); GrpLen = len(GrpLst);
+NLst = eval(options.NLst); 
+NPeriod = NLst[0]; NSteps = NLst[1]; StrStep = NLst[2];
+Bias = float(options.Bias);
+BoltT = Temp*8.6173303e-5; BoltTS = (math.log(1e5)+Bias)*BoltT; PTS = -1;
+#For your reference ln(1e-5) = -11.5129 to make sure this never exist with 10^5 sampling
+print "Simulation temperature is set as ", Temp, "K";
+print "BoltT is set as", BoltT, "eV";
+
+start = time.time();
+#print start;
+# Initial set up for Monte Carlo Simulation
+POS = vp.posreader(InitConf);
+POS = vp.dismatcreate(POS);
+EDiff = 0.01;
+Etrack = './Etrack.log'; #The list for recording evolution of energy (Only succesful trials)
+Rdtrack = './Rdtrack.log'; #The list for recording each swap trial
+Ealltrack = './Ealltrack.log'; #The list for recording evolution of energy (All trials)
+IsChem = 0; #If perform off-stoichiometry calculations
+IndStaLst = []; IndFinLst = [];
+for i in range(5):
+    IndStaLst.append(sum(POS['AtomNum'][0:i]));
+    IndFinLst.append(sum(POS['AtomNum'][0:i+1])-1);
+
+# Start the loop of Monte Carlo Simulations
+### In the current version of code, the the sublatt key will not be updated.
+ClusterLst0 = CELib.clustercount(ClusterDes,POS);
+E0 = CELib.clusterE(ClusterLst0,ClusterCoef);
+print "E0 = "+str(E0);
+Count = 0; #Count succesful steps
+Countall = 0; #Count all steps
+os.mkdir('ConfDir');
+vp.poswriter('./ConfDir/POSCAR_Step'+str(Countall),POS); #Write initial configuration
+Fid = open(Etrack,'a');
+Fid.write('%i\t%f\t\n' %(Count, E0)); #Write out the energy profile
+Fid.close();
+E1 = E0;
+for i in range(NPeriod):
+    E0 = E1;
+    for j in range(NSteps):
+        RdSub = rd.randint(0,GrpLen-1); #decide which sublattice to change
+        IndSta1 = IndStaLst[GrpLst[RdSub][0]]; IndFin1 = IndFinLst[GrpLst[RdSub][0]];
+        IndSta2 = IndStaLst[GrpLst[RdSub][1]]; IndFin2 = IndFinLst[GrpLst[RdSub][1]];
+        RdAtom1 = rd.randint(IndSta1,IndFin1); RdAtom2 = rd.randint(IndSta2,IndFin2);
+        # Swap the position of atoms
+        OldPOS = copy.deepcopy(POS);
+        OldClusterLst0 = copy.deepcopy(ClusterLst0);
+        tmp = POS['LattPnt'][RdAtom1][:];
+        POS['LattPnt'][RdAtom1] = POS['LattPnt'][RdAtom2];
+        POS['LattPnt'][RdAtom2] = tmp;
+        POS['dismat']=CELib.dismatswap(POS['dismat'],RdAtom1,RdAtom2);
+        ClusterLst0=CELib.clusterswap(ClusterDes,POS,ClusterLst0,\
+                GrpLst[RdSub][0],GrpLst[RdSub][1],RdAtom1,RdAtom2);
+        E2 = CELib.clusterE(ClusterLst0,ClusterCoef);
+        deltaE = E2-E1;
+        Countall += 1;
+        if (deltaE < 0):
+            P_E = 1.1; # energy being lower would always be accepted
+        elif (deltaE < BoltTS):
+            P_E = math.exp(-deltaE/BoltT + Bias);
+        else:
+            P_E = PTS; 
+            #Since P_E < 1e-5 (deltaE >> BoltTS) no need to count for effciency
+        RandSwap = rd.random();
+        print P_E,deltaE,RandSwap;
+        if (P_E >= RandSwap):
+            print "swap successful";
+            IsSwap = 1;
+            E1 = E2; #Get rid of double counting
+            Count += 1;
+            Fid = open(Etrack,'a');
+            Fid.write('%i\t%f\t%f\t%i\t\n' %(Count, E2, deltaE, Countall)); #Write out the energy profile
+            Fid.close();
+            #vp.poswriter('./POSCAR_Fin',POS);
+        else:
+            #swap it back then
+            print "swap not successful";
+            POS = copy.deepcopy(OldPOS);
+            ClusterLst0 = copy.deepcopy(OldClusterLst0);
+            IsSwap = 0;
+            E2 = E1; #Just in case iteration is done
+        Fid1 = open(Rdtrack,'a');
+        Fid1.write('%i%s%f%s%f%s\n' %(Countall, \
+                ' P_E = ', P_E, "; RandSwap = ", RandSwap,";"));
+        Fid1.close();
+        Fid2 = open(Ealltrack,'a');
+        Fid2.write('%i\t%f\n' %(Countall, E2));
+        Fid2.close();
+        if Countall%StrStep == 0:
+            vp.poswriter('./ConfDir/POSCAR_Step'+str(Countall),POS);
+    vp.poswriter('./POSCAR_Fin',POS);
+fin = time.time();
+UsedTime = fin - start;
+print "Time elapsed is "+str(UsedTime)+" s";
+

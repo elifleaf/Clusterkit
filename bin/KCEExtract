@@ -1,0 +1,39 @@
+#!/usr/bin/env python
+#######################################################################
+# Script for cluster expansion monte carlo
+#######################################################################
+
+import os
+import Vasp as vp
+import CELib
+import random as rd
+import argparse
+import copy
+import time
+
+parser = argparse.ArgumentParser(description = 'Script for running CEMC.');
+parser.add_argument('-des', action='store', dest="KClusterDes", required=True, \
+        help='Tell the description of each cluster');
+parser.add_argument('--sl', action='store', dest="SiteLst", default='SiteLst.dat' \
+        help='File containing the NEB site information (default: SiteLst.dat)');
+parser.add_argument('--O', action='store', dest="OutFile", default='KCEDat.yaml');
+parser.add_argument('--I')
+
+options=parser.parse_args();
+
+KClusterDes = eval(options.KClusterDes); SiteLst = options.SiteLst;
+OutFile = options.OutFile;
+
+Fid = open(SiteLst);
+while 1:
+    Line = Fid.readline();
+    if not Line:
+        print('Finish reading site list file: %s' %SiteLst);
+        break;
+    else:
+        Sline = Line.split(); AtomLst = [int(ind) - 1 for ind in Sline];
+        AtomNum = len(AtomLst);
+        DirName = '';
+        for i ind in Sline:
+            DirName+=str(ind);
+Fid.close();

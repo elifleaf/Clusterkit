@@ -1,0 +1,91 @@
+#!/usr/bin/env python
+#######################################################################
+# Script for extract the energetics and cluster information
+#######################################################################
+
+__author__ = 'Bin Ouyang'
+import os
+import Vasp as vp
+import CELib
+import numpy as np
+import argparse,textwrap
+import yaml
+
+parser = argparse.ArgumentParser(description = 'Script for extracting CE data.',
+        formatter_class=argparse.RawTextHelpFormatter);
+parser.add_argument('-Des', action='store', dest="ClusterDes", required=True, \
+        help='Tell the description of each cluster');
+parser.add_argument('-Comp', action='store', dest="Comp", required=True, \
+        help='Composition list used for making dir');
+parser.add_argument('-Tag', action='store', dest="Tag", required=True, \
+        help='Tag list used for each composition');
+parser.add_argument('--RN', action='store', dest="RdNum", default="50", \
+        help='Number of random structures for each composition, can be one digit or list');
+parser.add_argument('--O', action='store', dest="OutFile", default="CEDat.yaml", \
+        help='Out put file name (default: CEDat.yaml)');
+parser.add_argument('--P', action='store', dest="PreConf", default="POSCARRand", \
+        help='Prefix of each configuration name (default: POSCARRand)');
+parser.add_argument('--Pos', action='store', dest="POSName", default="POSCAR", \
+        help='Name of the position file to read (default: POSCAR)')
+options=parser.parse_args();
+
+ClusterDes = eval(options.ClusterDes); Comp = eval(options.Comp); Tag = eval(options.Tag);
+RdNum = eval(options.RdNum); OutFile = options.OutFile; PreConf = options.PreConf;
+POSName = options.POSName;
+#Preprocessing
+CompLen = len(Comp);
+if type(RdNum) == int:
+    RdNum = [RdNum]*CompLen;
+DirNameLst = [];
+for EleNumLst in Comp:
+    DirName = '';
+    for i, Num in enumerate(EleNumLst):
+        DirName += Tag[i] + str(Num);
+    DirNameLst.append(DirName);
+#print DirNameLst;
+ConfInd = [range(Num) for Num in RdNum];
+#print ConfInd;
+
+#Format into yaml file
+Data = {};
+Data['Clusterdes'] = ClusterDes;
+Data['Calculation Folder'] = DirNameLst;
+Data['Configuration Lst'] = ConfInd;
+
+#Let's start data extraction
+ELst = []; ClusterSet = [];
+for i, Dir in enumerate(DirNameLst):
+    os.chdir(Dir);
+    ClusterSet.append([]);
+    Data[Dir] = {};
+    ELst.append([]);
+    for Ind in ConfInd[i]:
+        ConfName = PreConf+str(Ind);
+        os.chdir(ConfName);
+        print(os.getcwd());
+        if 'POS' in globals():
+            del POS;
+        POS = vp.posreader(POSName);
+        POS = vp.dismatcreate(POS);
+        #print(ClusterDes)
+        Data[Dir][ConfName] = {};
+        ClusterLst = CELib.clustercount(ClusterDes,POS);
+        ClusterCount = CELib.countCluster(ClusterLst);
+        for IrreKey in ['Keys','SubLatt','dismat']:
+            if IrreKey in POS.keys():
+                del POS[IrreKey];
+        Data[Dir][ConfName]['Position File'] = POS;
+        Cmd = "grep 'E0' OSZICAR | tail -1 | awk '{printf \"%f\",$5}'"
+        Etotal = eval(os.popen(Cmd).read());
+        Data[Dir][ConfName]['Cluster Expansion'] = [Etotal]+ClusterCount;
+        ClusterSet[i].append(ClusterCount)
+        ELst[i].append(Etotal);
+        os.chdir('../'); #Exit ConfName
+    os.chdir('../'); #Exit Dir
+#print(ELst)
+Data['ESet'] = ELst;
+Data['ClusterSet'] = ClusterSet;
+with open(OutFile,'w') as outfile:
+    yaml.dump(Data, outfile, explicit_start=True);
+
+

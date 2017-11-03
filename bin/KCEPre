@@ -1,0 +1,234 @@
+#!/usr/bin/env python
+#######################################################################
+# Script for preparing the kinetic cluster expansion calculation
+#######################################################################
+
+__author__ = 'Bin Ouyang'
+import os
+import Vasp as vp
+import CELib
+import numpy as np
+import argparse,textwrap
+import yaml
+import random as rd
+import math,copy
+
+parser = argparse.ArgumentParser(description = 'Script for extracting CE data.',
+        formatter_class=argparse.RawTextHelpFormatter);
+parser.add_argument('-Sub', action='store', dest="SubLatt", required=True, \
+        help=textwrap.dedent('''Tell effective sublattice in reference cell'''));
+parser.add_argument('-Ele', action='store', dest="EleName", required=True, \
+        help='List of elements with substitution')
+parser.add_argument('-Diff', action='store', dest="DiffLatt", required=True, \
+        help='Tell the diffuser sublattice, should be a integer in this version');
+parser.add_argument('--NCut', action='store', dest="NCut",default = 2,\
+        help='The cutoff of cluster size (default: 2)');
+parser.add_argument('--DCut', action='store', dest="DCut",default = "Half",\
+        help='Cutoff distance of inteaction, default is half cell size (default: Half)');
+parser.add_argument('--N', action='store', dest='NBarrier',default = 30,\
+        help='Number of random NEB calculations to be created');
+parser.add_argument('--C', action='store', dest="Conf", default="POSCARRef", \
+        help='Reference structures (default: POSCARRef)');
+parser.add_argument('--P', action='store', dest="PntLst", default="Center", \
+        help='The StaInd and FinInd reference, should be a list of two index:\
+        StaInd and FinInd (default: Center)');
+parser.add_argument('--O', action='store', dest="OutFile", default="KCEConf.yaml",\
+        help='Output file for the KCE informations (default: KCEConf.yaml)');
+parser.add_argument('--MV', action='store', dest="MaxVac", default = 6, \
+        help='Set maximum NVac to avoid significant thrinkage (default: 6)')
+
+options=parser.parse_args();
+SubLatt = eval(options.SubLatt); EleName = eval(options.EleName);
+DiffLatt = int(options.DiffLatt); NCut = int(options.NCut); 
+NBarrier = int(options.NBarrier); Conf = options.Conf;
+OutFile = options.OutFile
+TS = 0.3; #Variation of cluster length
+
+###Data preprocessing
+POSRef = vp.posreader(Conf);
+SumLst = [sum(POSRef['AtomNum'][0:i]) for i in range(POSRef['EleNum'])];
+POSRef = vp.posreader(Conf); POSRef = vp.dismatcreate(POSRef);
+IndLst = np.array(range(POSRef['AtomNum'][DiffLatt])) + \
+        SumLst[DiffLatt];
+IndLst = list(IndLst);
+if options.PntLst == "Center":
+    print('Looking for reference point near center of cell...');
+    MidPnt = [0.5]*3; RefDist = 100; #100A as obviously large starting point
+    PntLst = [0]*2; Dist1NN = 100; #100A as obviously large starting point 
+    for ind1 in IndLst:
+        PntTmp = POSRef['LattPnt'][ind1];
+        DistTmp = math.sqrt(sum([(MidPnt[i]-PntTmp[i])**2 for i in range(3)]));
+        if DistTmp < RefDist:
+            PntLst[0] = ind1; RefDist = DistTmp;
+            #print('DistTmp = %f' %DistTmp);
+    for ind2 in IndLst:
+        DistTmp = POSRef['dismat'][PntLst[0]][ind2];
+        if (DistTmp > 0) & (DistTmp < Dist1NN):
+            PntLst[1] = ind2; Dist1NN = DistTmp;
+    print('Reference point indexes are found as %s' %(str(PntLst)));
+else:
+    PntLst = eval(options.PntLst);
+RefPnt0 = POSRef['LattPnt'][PntLst[0]];
+RefPnt1 = POSRef['LattPnt'][PntLst[1]];
+print('Reference points: %s, %s' %(list(RefPnt0),list(RefPnt1)));
+if options.DCut == "Half":
+    print('DCut set as half length of the cell');
+    DCut = 100.0;
+    for i in range(3):
+       DMax = max(POSRef['Base'][i])/2.0 + TS;
+       if DMax < DCut:
+           DCut = DMax;
+    print('Cutoff cluster length is %f A' %DCut);
+else:
+    DCut = eval(options.DCut);
+
+###Prepare KCE configuration file
+KCEData = {}; #Initialize dictionary
+KCEData['NCut'] = NCut; KCEData['DCut'] = DCut;
+KCEData['PntLst'] = list(PntLst);
+KCEData['Pnt'] = [RefPnt0,RefPnt1];
+
+#Remove the atom with PntLst[1];
+POSRef['AtomNum'][DiffLatt]-=1; POSRef['AtomSum']-=1; 
+POSRef['LattPnt'].remove(RefPnt1);
+#print(len(POSRef['LattPnt']));
+if (PntLst[0] > PntLst[1]):
+    PntLst[0] -= 1;
+vp.poswriter(Conf+'_Vac',POSRef);
+POSRef['LattPnt'][PntLst[0]]=list((np.array(RefPnt0)+np.array(RefPnt1))/2);
+POSRef = vp.dismatcreate(POSRef);
+#print(POSRef['LattPnt'][PntLst[0]],PntLst[0]);
+vp.poswriter(Conf+'_VacSad',POSRef);
+#print('Reference point indexes are found as %s' %(str(PntLst)));
+
+EffPntLst, KClusterSum, KClusterNum, KClusterDesLst = \
+        CELib.ceAtomFind(SubLatt,POSRef,DiffLatt,PntLst[0],NCut,1,DCut);
+KClusterDes = [];
+for Des in KClusterDesLst:
+    KClusterDes += Des;
+
+KCEData['EffPntLst'] = list(EffPntLst);
+KCEData['KClusterDes'] = list(KClusterDes);
+print('KCEData: '+str(KCEData));
+print('#############################################################');
+
+#write out the KCE configuration file
+Fid = open(OutFile,'w');
+yaml.dump(KCEData,Fid);
+Fid.close();
+#Fid = open(OutFile,'r');
+#KCEtmp=yaml.load(Fid);
+#print(KCEtmp);
+#Fid.close();
+
+###Prepare NEB calculations
+NEffPnt = [];
+for EffInd, EffLst in enumerate(KCEData['EffPntLst']):
+    NEffPnt.append(len(EffLst));
+
+POSRef['LattPnt'][PntLst[0]] = RefPnt0;
+for i in range(NBarrier):
+    if 'POS' in globals():
+        del POS;
+    POS = copy.deepcopy(POSRef); del POS['dismat'], POS['SubLatt'];
+    POS['EleName'] = []; POS['EleNum'] = len(POS['EleName']);
+    POS['AtomNum'] = []; POS['LattPnt'] = [];
+    Count = 0;
+    for SubInd, Sub in enumerate(SubLatt):
+        DopLst = list(KCEData['EffPntLst'][SubInd]);
+        IndLst = list(np.array(range(POSRef['AtomNum'][SubInd]))+SumLst[SubInd]);
+        if len(Sub) == 1:
+            POS['AtomNum'].append(POSRef['AtomNum'][SubInd]);
+            for Ind in IndLst:
+                POS['LattPnt'].append(POSRef['LattPnt'][Ind])
+            POS['EleName'].append(EleName[SubInd][0]);
+        elif (len(Sub) > 1) & (SubInd != DiffLatt):
+            NPnt = NEffPnt[SubInd];
+            for LattInd,Latt in enumerate(Sub[0:-1]):
+                if LattInd == 0: #The first element in sublattice is the default one
+                    POS['AtomNum'].append(0);
+                    POS['EleName'].append(EleName[SubInd][0]);
+                    for Ind in IndLst:
+                        if Ind not in DopLst:
+                            POS['LattPnt'].append(POSRef['LattPnt'][Ind]);
+                            POS['AtomNum'][-1]+=1;
+                if NPnt > 0:
+                    RdN = rd.randint(0,NPnt);
+                    RLst = rd.sample(DopLst,RdN);
+                    for Ind in RLst:
+                        POS['LattPnt'].append(POSRef['LattPnt'][Ind]);
+                    NPnt -= RdN;
+                    if RdN > 0:
+                        if LattInd == 0:
+                            POS['AtomNum'][-1]+=RdN;
+                        else:
+                            POS['EleName'].append(EleName[SubInd][LattInd]);
+                            POS['AtomNum'].append(RdN);
+                    for Ind in RLst:
+                        DopLst.remove(Ind);
+                else:
+                    break;
+            if NPnt > 0:
+                for Ind in DopLst:
+                    POS['LattPnt'].append(POSRef['LattPnt'][Ind]);
+                POS['EleName'].append(EleName[SubInd][-1]);
+                POS['AtomNum'].append(NPnt);
+        elif SubInd == DiffLatt: #The last ele is by default vacancy
+            NPnt = NEffPnt[SubInd];
+            for LattInd,Latt in enumerate(Sub[0:-2]):
+                if LattInd == 0: #The first element in sublattice is the default one 
+                    POS['AtomNum'].append(0);
+                    POS['EleName'].append(EleName[SubInd][0]);
+                    for Ind in IndLst:
+                        if Ind not in DopLst:
+                            POS['LattPnt'].append(POSRef['LattPnt'][Ind]);
+                            POS['AtomNum'][-1]+=1;
+                if NPnt > 0:
+                    RdN = rd.randint(0,NPnt);
+                    RLst = rd.sample(DopLst,RdN);
+                    for Ind in RLst:
+                        POS['LattPnt'].append(POSRef['LattPnt'][Ind]);
+                    NPnt -= RdN;
+                    if RdN > 0 :
+                        if LattInd == 0:
+                            POS['AtomNum'][-1]+=RdN;
+                        else:
+                            POS['EleName'].append(EleName[SubInd][LattInd]);
+                            POS['AtomNum'].append(RdN);
+                    for Ind in RLst:
+                        DopLst.remove(Ind);
+                else:
+                    break;
+            if NPnt > 6:
+                if len(Sub) == 2:
+                    POS['AtomNum'].append(0);
+                    POS['EleName'].append(EleName[SubInd][0]);
+                    for Ind in IndLst:
+                        if Ind not in DopLst:
+                            POS['LattPnt'].append(POSRef['LattPnt'][Ind]);
+                            POS['AtomNum'][-1]+=1;
+                RdNVac = rd.randint(0,6); RdN = NPnt - RdNVac;
+                RLst = rd.sample(DopLst,RdN);
+                for Ind in RLst:
+                    POS['LattPnt'].append(POSRef['LattPnt'][Ind]);
+                NPnt -= RdN;
+                if len(Sub) == 2:
+                    POS['AtomNum'][-1]+=RdN;
+                else:
+                    POS['EleName'].append(EleName[SubInd][-2]);
+                    POS['AtomNum'].append(RdN);
+                if RefPnt0 not in POS['LattPnt']:
+                    POS['LattPnt'].append(RefPnt0);
+                    POS['AtomNum'][-1]+=1;
+    POS['EleNum'] = len(POS['EleName']); POS['AtomSum'] = sum(POS['AtomNum']);
+
+    NEBDir = 'NEB'+str(i);
+    os.system('mkdir %s;' %NEBDir); os.chdir(NEBDir);
+    print(POS);
+    vp.poswriter('POSCAR1',POS);
+    RefInd0 = POS['LattPnt'].index(RefPnt0);
+    POS['LattPnt'][RefInd0] =  RefPnt1;
+    vp.poswriter('POSCAR2',POS);
+    os.system('nebmake.pl POSCAR1 POSCAR2 5; nebmovie.pl;');
+    os.chdir('../');
+

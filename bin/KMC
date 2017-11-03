@@ -1,0 +1,96 @@
+#!/usr/bin/env python
+#######################################################################
+# Script for kinetic monte carlo under non-dilute condition
+# Editted by Dr. Bin Ouyang
+#######################################################################
+# This is the script for running a kinetic monte carlo simulations
+#######################################################################
+#Format of definition
+#functions are all non-capitalized
+#dictionaries are all capitalized
+#Other variables are first letter capitalized
+#Please note that for keys in some dictionary, if the name is the same
+#with INCAR tags, it will be all capital
+
+import os
+import Vasp as vp
+import KMCLib
+import random as rd
+import argparse
+import time, math, copy
+
+parser = argparse.ArgumentParser(description = 'Script for running KMC simulation.');
+parser.add_argument('-des', action='store', dest="ClusterDes", required=True, \
+        help='Tell the description of each cluster');
+parser.add_argument('-coef', action='store', dest="ClusterCoef", required=True, \
+        help='Tell the coefficient fitted for cluster expansion');
+parser.add_argument('-kdes', action='store', dest="KClusterDes", required=True, \
+        help='Tell the description of each kinetic cluster');
+parser.add_argument('-kcoef', action='store', dest="KClusterCoef", required=True, \
+        help='Tell the coefficient fitted for kinetic cluster expansion');
+parser.add_argument('-t', action='store', dest="Temp", required=True, \
+        help='Tell the temperature of the simulation');
+parser.add_argument('-sitelst', action='store', dest="Sitelst", required=True, \
+        help='List of site information, 1st: sublattice list that contain vacancy'+\
+        '2nd: sublattice in Ref containing vacancy');
+parser.add_argument('-r',action='store',dest="Radius",required=True, \
+        help='Radius that atomic jump can happen');
+parser.add_argument('-fre',action='store',dest='Fre0',required=True, \
+        help='Attempt frequency of a certain atom');
+parser.add_argument('--ini', action='store', dest="InitConf", default="POSCAR_Primary", \
+        help='Starting Configuration (default: POSCAR_Primary)');
+parser.add_argument('--ref', action='store', dest="Ref", default="POSCAR_Ref", \
+        help='Reference configuration for vacancy indentification (default: POSCAR_Ref)');
+options=parser.parse_args();
+
+ClusterDes = eval(options.ClusterDes); ClusterCoef = eval(options.ClusterCoef);
+KClusterDes = eval(options.KClusterDes); KClusterCoef = eval(options.KClusterCoef);
+Temp = eval(options.Temp); InitConf = options.InitConf; Ref = options.Ref;
+SiteLst = options.SiteLst; BoltT = Temp*8.6173303e-5; #KbT
+
+#print Temp, Temp+1
+print "Simulation temperature is set as ", Temp, "K";
+print "BoltT is set as", BoltT, "eV";
+
+#Standard KMC set up
+start = time.time();
+NPeriod = 20; # number of period, check after each period
+NSteps = 500; # number of steps in each period
+EDiff = 0.01;
+#print start;
+
+###Initialize the POS dictionary
+POS = vp.posreader(InitConf); POSRef = vp.posreader(Ref); 
+POS = vp.findVac(POS,POSRef,SiteLst[0],SiteLst[1]);
+POS = vp.dismatcreate(POS);
+DistTab = [0.0]*POS['AtomSum']; #Table tracking the moving of all atoms
+AtomSite = SiteLst[0]; VacSite = len(POS['EleNum']) - 1;
+AtomStaInd = sum(POS['AtomNum'][0:AtomSite]);
+AtomFinInd = sum(POS['AtomNum'][0:AtomSite+1]);
+AtomIndLst = range(AtomStaInd,AtomFinInd);
+VacStaInd = sum(POS['AtomNum'][0:VacSite]);
+VacFinInd = sum(POS['AtomNum'][0:VacSite+1]);
+VacIndLst = range(VacStaInd,VacFinInd);
+KMCSim0 = KMCLib.kmcobj(POS,KClusterdes,Clusterdes,KCECoeff,\
+        CECoeff,Radius,AtomSite,VacSite,AtomIndLst,VacIndLst,Fre0,BoltT);
+KMCSim0.reactionFind(); #Initiate reactions
+KMCSim0.rateCalc(Fre0,BoltT); #Initiate the rates for each reactions
+print(KMCSim0); #Print the information of simulator
+
+####Start the random walking
+for i in range(NPeriod):
+    for j in range(NSteps):
+        rdnum = rd.uniform(0,1);
+        [AtomInd,VacInd] = KMCSim0.findEvent(rdnum);
+        rdnum = rd.uniform(0,1);
+        KMCSim0.DiffTime += -math.log(rdnum)/ KMCSim0.totalRates;
+        OldPOS = copy.deepcopy(KMCSim0.POS);
+        [Ind,Dist]=KMCSim0.reactionUpdate(AtomInd,VacInd);
+        DistTab[Ind] += Dist;
+        KMCSim0.rateUpdate(AtomInd,VacInd);
+
+fin = time.time();
+UsedTime = fin - start;
+print "Time elapsed is "+str(UsedTime)+" s";
+print "KMC simulation finished";
+

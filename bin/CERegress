@@ -1,0 +1,64 @@
+#!/usr/bin/env python
+#######################################################################
+# Script for extract the energetics and cluster information
+#######################################################################
+
+__author__ = 'Bin Ouyang'
+import os
+import Vasp as vp
+import CELib
+import numpy as np
+import argparse,textwrap
+import yaml
+
+parser = argparse.ArgumentParser(description = 'Script for extracting the DOSCAR.',
+        formatter_class=argparse.RawTextHelpFormatter);
+parser.add_argument('--DF', action='store', dest="CEDataFile", default="CEDat.yaml", \
+        help='Tell yaml data file, usually generated from CEExtract (default: CEDat.yaml)');
+parser.add_argument('--I', action='store', dest="CIndLst", default="all", \
+        help='Effective indexes used in regressing')
+parser.add_argument('--O', action='store', dest="OutFile", default="CEResults.yaml")
+options=parser.parse_args();
+
+#Arguments set up
+CEDataFile = options.CEDataFile; OutFile = options.OutFile;
+if options.CIndLst == "all":
+    CIndLst = options.CIndLst;
+else:
+    CIndLst = eval(options.CIndLst);
+
+#Read Cluster data
+print("#################################################");
+print("Reading cluster data from %s ......" %(CEDataFile));
+Fid = open(CEDataFile,'r');
+Data = yaml.load(Fid);
+Fid.close();
+ClusterSets = Data['ClusterSet']; ELst = Data['ESet'];
+print("Cluster data reading is finished")
+print("#################################################");
+
+#Fitting ECI
+ClusterSet = []; ESet = [];
+for DataSet in ClusterSets:
+    ClusterSet+=DataSet;
+for Lst in ELst:
+    ESet+=Lst;
+ClusterSet = np.array(ClusterSet);
+if CIndLst != "all":
+    ClusterSet = ClusterSet[:,CIndLst];
+    ClusterSet = list(ClusterSet);
+ClusterCoeff = CELib.ceFit(ESet, ClusterSet);
+ClusterSet = ClusterSet.tolist();
+
+#Preparing and export fitting results
+DataOut = {};
+DataOut['Clusterdes'] = list(Data['Clusterdes']);
+DataOut['Cluster Coeffcient'] = list(ClusterCoeff);
+DataOut['Calculation Folder'] = list(Data['Calculation Folder']);
+DataOut['Configuration Lst'] = list(Data['Configuration Lst']);
+DataOut['ESet'] = list(ESet); DataOut['ClusterSet'] = list(ClusterSet);
+Fid = open(OutFile,'w');
+yaml.dump(DataOut, Fid, explicit_start=True);
+Fid.close();
+print("Cluster analysis results are dumped into %s" %(OutFile));
+print("#################################################");
