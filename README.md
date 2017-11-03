@@ -16,7 +16,7 @@ Contributors
 ============
 * Bin Ouyang, initial design, implementation and maintainance. Online profile: http://bouyang.wixsite.com/road-to-mse
 
-Thanks for the discussions with Professor Elif Ertekin and Professor Narayana Aluru, who are my postdoc advisors during 2017.01-2017.12 at UIUC. Meanwhile, the useful suggustions from Professor Tim Mueller from Johns Hopkins University
+Thanks for the discussions with Professor Elif Ertekin and Professor Narayana Aluru, who are my postdoc advisors during 2017.01-2017.12 at UIUC. Meanwhile, I would like to thank the useful suggustions from Professor Tim Mueller in Johns Hopkins University.
 
 Support
 =======
