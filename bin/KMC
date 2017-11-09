@@ -15,6 +15,7 @@
 import os
 import Vasp as vp
 import KMCLib
+import numpy as np
 import random as rd
 import argparse
 import time, math, copy
@@ -43,16 +44,18 @@ parser.add_argument('--ref', action='store', dest="Ref", default="POSCAR_Ref", \
         help='Reference configuration for vacancy indentification (default: POSCAR_Ref)');
 options=parser.parse_args();
 
+###Initilization of enviromental variables
 ClusterDes = eval(options.ClusterDes); ClusterCoef = eval(options.ClusterCoef);
 KClusterDes = eval(options.KClusterDes); KClusterCoef = eval(options.KClusterCoef);
-Temp = eval(options.Temp); InitConf = options.InitConf; Ref = options.Ref;
-SiteLst = options.SiteLst; BoltT = Temp*8.6173303e-5; #KbT
+Temp = float(options.Temp); SiteLst = eval(options.Sitelst); Radius = float(options.Radius); 
+Fre0 = float(options.Fre0); InitConf = options.InitConf; Ref = options.Ref; 
+BoltT = Temp*8.6173303e-5; #KbT
 
 #print Temp, Temp+1
 print "Simulation temperature is set as ", Temp, "K";
 print "BoltT is set as", BoltT, "eV";
 
-#Standard KMC set up
+###Standard KMC set up
 start = time.time();
 NPeriod = 20; # number of period, check after each period
 NSteps = 500; # number of steps in each period
@@ -64,30 +67,37 @@ POS = vp.posreader(InitConf); POSRef = vp.posreader(Ref);
 POS = vp.findVac(POS,POSRef,SiteLst[0],SiteLst[1]);
 POS = vp.dismatcreate(POS);
 DistTab = [0.0]*POS['AtomSum']; #Table tracking the moving of all atoms
-AtomSite = SiteLst[0]; VacSite = len(POS['EleNum']) - 1;
-AtomStaInd = sum(POS['AtomNum'][0:AtomSite]);
-AtomFinInd = sum(POS['AtomNum'][0:AtomSite+1]);
-AtomIndLst = range(AtomStaInd,AtomFinInd);
-VacStaInd = sum(POS['AtomNum'][0:VacSite]);
-VacFinInd = sum(POS['AtomNum'][0:VacSite+1]);
-VacIndLst = range(VacStaInd,VacFinInd);
-KMCSim0 = KMCLib.kmcobj(POS,KClusterdes,Clusterdes,KCECoeff,\
-        CECoeff,Radius,AtomSite,VacSite,AtomIndLst,VacIndLst,Fre0,BoltT);
-KMCSim0.reactionFind(); #Initiate reactions
-KMCSim0.rateCalc(Fre0,BoltT); #Initiate the rates for each reactions
+AtomSite = SiteLst[0]; VacSite = POS['EleNum'] - 1;
+AtomIndLst = [];
+
+###Initialize the diffusor Index list
+for Site in AtomSite:
+    AtomIndLst += list(np.array(range(POS['AtomNum'][Site])) + sum(POS['AtomNum'][0:Site]));
+VacIndLst = list(np.array(range(POS['AtomNum'][VacSite])) + sum(POS['AtomNum'][0:VacSite]));
+KMCSim0 = KMCLib.kmcobj(POS,KClusterDes);
+KMCSim0.kmcSetup(ClusterDes,KClusterCoef,ClusterCoef,Radius,AtomSite,
+        VacSite,AtomIndLst,VacIndLst,Fre0,BoltT) #!!!AtomSite is a list instead of integer
+KMCSim0.reactionFind(True); #Initiate reactions
+KMCSim0.rateCalc(); #Initiate the rates for each reactions
 print(KMCSim0); #Print the information of simulator
 
 ####Start the random walking
+Nstep = 0;
 for i in range(NPeriod):
     for j in range(NSteps):
         rdnum = rd.uniform(0,1);
         [AtomInd,VacInd] = KMCSim0.findEvent(rdnum);
         rdnum = rd.uniform(0,1);
-        KMCSim0.DiffTime += -math.log(rdnum)/ KMCSim0.totalRates;
+        KMCSim0.diffusetime += -math.log(rdnum) / KMCSim0.totalRates * 1.0e15;
         OldPOS = copy.deepcopy(KMCSim0.POS);
         [Ind,Dist]=KMCSim0.reactionUpdate(AtomInd,VacInd);
         DistTab[Ind] += Dist;
         KMCSim0.rateUpdate(AtomInd,VacInd);
+        print('KMCSim0.totalRates = %f ' %KMCSim0.totalRates);
+        print('Jump Distance = %f A' %Dist);
+        print('Diffusion time = %f fs' %KMCSim0.diffusetime);
+        Nstep += 1;
+        print('Nstep = %i' %Nstep);
 
 fin = time.time();
 UsedTime = fin - start;

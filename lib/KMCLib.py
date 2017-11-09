@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 ##########################################################################
+#Nanokit module for Python
+#Last editted by Dr. Bin Ouyang 2017.07.03
+##########################################################################
 #This is the lib containing all the methods for Kinetic Monter Carlo
 ##########################################################################
 #Format of definition
@@ -15,15 +18,16 @@ import Vasp as vp
 import numpy as np
 import math
 import random as rd
-import CELib
+import CELib, MathKit
 import copy
 
 class kmcobj(object):
     '''
     A class for kmc simulator
     '''
-    def __init__(self,POS,KClusterdes,Clusterdes,KCECoeff,\
-            CECoeff,Radius,AtomSite,VacSite,AtomIndLst,VacIndLst,Fre0,BoltT):
+    #def __init__(self,POS,KClusterdes,Clusterdes,KCECoeff,\
+    #        CECoeff,Radius,AtomSite,VacSite,AtomIndLst,VacIndLst,Fre0,BoltT):
+    def __init__(self,POS,KClusterdes):
         '''
         Initialization;
 
@@ -40,14 +44,6 @@ class kmcobj(object):
         '''
         self.POS = POS;
         self.KClusterdes = KClusterdes; #Kinetic clusters
-        self.Clusterdes = Clusterdes; #Regular clusters
-        self.KCECoeff = KCECoeff; self.CECoeff = CECoeff;
-        self.Radius = Radius;
-        self.AtomSite = AtomSite; self.VacSite = VacSite;
-        self.AtomIndLst = AtomIndLst; self.VacIndLst = VacIndLst;
-        self.Fre0 = Fre0; self.BoltT = BoltT;
-        self.CELst = CELib.clustercount(self.Clusterdes,self.POS); #Energetic clusterlist
-        self.diffusetime = 0.0;
 
     def __str__(self):
         '''
@@ -66,18 +62,34 @@ class kmcobj(object):
             Notes += Ele + ' ';
         Notes += '\n';
         Notes += '###################################\n';
-        Notes += 'Diffusion species: '+POS['EleName'][self.AtomSite];
-        Notes += '###################################\n';
+        for Site in self.AtomSite:
+            Notes += 'Diffusion species: '+self.POS['EleName'][Site];
+        Notes += '\n###################################\n';
         Notes += 'Energetic Clusters Considered: '
         Notes += str(self.Clusterdes) + '\n';
         Notes += '###################################\n';
         Notes += 'Kinetic Clusters Considered: '
         Notes += str(self.KClusterdes) + '\n';
         Notes += '###################################\n';
-        Notes += 'Diffusion time reset as %fi \n' %DiffTime;
+        Notes += 'Diffusion time reset as %f s\n' %self.diffusetime;
         Notes += '###################################\n';
 
         return Notes;
+
+    def kmcSetup(self,Clusterdes,KCECoeff,CECoeff,Radius,AtomSite,VacSite,\
+            AtomIndLst,VacIndLst,Fre0,BoltT):
+        """
+        Set up a KMC simulation
+        """
+        self.Clusterdes = Clusterdes; #Regular clusters
+        self.KCECoeff = KCECoeff; self.CECoeff = CECoeff;
+        self.Radius = Radius;
+        self.AtomSite = AtomSite; self.VacSite = VacSite;
+        self.AtomIndLst = AtomIndLst; self.VacIndLst = VacIndLst;
+        self.Fre0 = Fre0; self.BoltT = BoltT;
+        self.CELst = CELib.clustercount(self.Clusterdes,self.POS); #Energetic clusterlist
+        self.diffusetime = 0.0;
+
 
     def kclusterEvaluate1(self,AtomInd):
         '''
@@ -99,7 +111,7 @@ class kmcobj(object):
             GrpLst = MathKit.findGrpLst(Cluster[0]);
             PermuteLst = MathKit.grporderPermute(Cluster[0],GrpLst);
             DistRef = MathKit.grpSort(Cluster[1],PermuteLst);
-            ClusterTmp = copy.deepcopy(Cluster[0]];
+            ClusterTmp = copy.deepcopy(Cluster[0]);
             ClusterTmp.remove(Atom);
             for Ele in ClusterTmp:
                 IndLstMax.append(POS['AtomNum'][Ele] - 1);
@@ -133,17 +145,22 @@ class kmcobj(object):
             print('Did not find dismat key in POS,\
                     Please create the distance matrix first');
             return None;
-        TS1 = 0.998; TS2 = 1.002; #The range of length variation
+        TS1 = 0.98; TS2 = 1.02; #The range of length variation
         ClusterNum = len(self.KClusterdes);
+        #vp.poswriter('./POSCAR_debug',self.POS);
+        #print(self.POS['dismat'][49][68]);
+        #print(self.POS['LattPnt'][68]);
         ClusterLst = [[] for i in range(ClusterNum)];
         for ClusterInd, Cluster in enumerate(self.KClusterdes):
-            #print Cluster
             ClusterSize = len(Cluster[0]);
             if Cluster[0][0] == 'Sta':
                 GInd0 = StaInd;
                 for Ind1 in range(self.POS['AtomNum'][Cluster[0][1]]):
-                    GInd1 = Ind1 + sum(POS['AtomNum'][0:Cluster[0][1]]);
-                    Dis_01 = POS['dismat'][GInd0][GInd1];
+                    GInd1 = Ind1 + sum(self.POS['AtomNum'][0:Cluster[0][1]]);
+                    Dis_01 = self.POS['dismat'][GInd0][GInd1];
+                    #if (GInd0 == 68) & (GInd1 == 49):
+                       #print('Dis_01=',Dis_01);
+                       #print('Cluster[1][0]=',Cluster[1][0]);
                     if (Dis_01*TS1<Cluster[1][0]) & (Dis_01*TS2>Cluster[1][0]):
                         #check if the cluster is already in the list
                         #if so, print 'yes'
@@ -157,8 +174,8 @@ class kmcobj(object):
             elif Cluster[0][0] == 'Fin':
                 GInd0 = FinInd;
                 for Ind1 in range(self.POS['AtomNum'][Cluster[0][1]]):
-                    GInd1 = Ind1 + sum(POS['AtomNum'][0:Cluster[0][1]]);
-                    Dis_01 = POS['dismat'][GInd0][GInd1];
+                    GInd1 = Ind1 + sum(self.POS['AtomNum'][0:Cluster[0][1]]);
+                    Dis_01 = self.POS['dismat'][GInd0][GInd1];
                     if (Dis_01*TS1<Cluster[1][0]) & (Dis_01*TS2>Cluster[1][0]):
                         #check if the cluster is already in the list
                         #if so, print 'yes'
@@ -192,69 +209,88 @@ class kmcobj(object):
         for Vackey in self.Reaction:
             self.RateLst[Vackey] = [];
             for Atom in self.Reaction[Vackey]:
-                Eb=self.rateCalcEach(Atom,Vackey);
+                #print(Atom,Vackey);
+                for i in range(self.POS['EleNum']):
+                    if Atom < sum(self.POS['AtomNum'][0:i]):
+                        AtomLatt = i; break;
+                Eb=self.rateCalcEach(Atom,Vackey,AtomLatt);
+                #print(type(self.Fre0),type(Eb),type(self.BoltT));
                 Omega0 = self.Fre0*math.exp(-Eb/self.BoltT);
                 self.RateLst[Vackey].append([Atom,Vackey,Omega0]);
+        print('RateLst = '+str(self.RateLst));
         self.totalRateCalc();
 
-    def rateCalcEach(self,AtomInd,VacInd):
+    def rateCalcEach(self,AtomInd,VacInd,AtomLatt):
         self.makeSadd(AtomInd,VacInd);
-        KClusterLst = self.kclusterEvaluate(self,AtomInd,AtomInd);
+        KClusterLst = self.kclusterEvaluate(AtomInd,AtomInd);
+        #print(str(KClusterLst));
         ####Calculate KRA
-        KRA = CELib.clusterE(self.KCECoeff,KClusterLst);
-        self.quitSadd(Atom,Vackey);
+        KRA = CELib.clusterE(KClusterLst,self.KCECoeff);
+        #print('KRA='+str(KRA))
+        self.quitSadd(AtomInd,VacInd);
         ####Calculate E_Fin and E_Sta
-        E_Sta = CELib.clusterE(self.CECoeff,self.CELst);
+        #print(len(self.CELst),len(self.CECoeff))
+        E_Sta = CELib.clusterE(self.CELst,self.CECoeff);
+        #print('ESta='+str(E_Sta));
         ###Swap Positions, note the POS dict is not changed because no need for it
-        self.POS['dismat'] = CELib.dismatswap(self.POS['dismat'],Atom,Vackey);
+        self.POS['dismat'] = CELib.dismatswap(self.POS['dismat'],AtomInd,VacInd);
         self.CELst = CELib.clusterswap(self.Clusterdes,self.POS,self.CELst,\
-                self.AtomSite,self.VacSite,Atom,Vackey);
-        E_Fin = CELib.clusterE(self.CECoeff,self.CELst);
+                AtomLatt,self.VacSite,AtomInd,VacInd);
+        E_Fin = CELib.clusterE(self.CELst,self.CECoeff);
+        #print('E_Fin='+str(E_Fin));
         ###Swap Positions back
-        self.POS['dismat'] = CELib.dismatswap(self.POS['dismat'],Atom,Vackey);
+        self.POS['dismat'] = CELib.dismatswap(self.POS['dismat'],AtomInd,VacInd);
         self.CELst = CELib.clusterswap(self.Clusterdes,self.POS,self.CELst,\
-                self.AtomSite,self.VacSite,Atom,Vackey);
+                AtomLatt,self.VacSite,AtomInd,VacInd);
         ####Calculate Eb=KRA+abs(E_Fin-E_Sta)/2;
-        Eb = KRA+abs(E_Fin-E_Sta)/2;
+        Eb = KRA+(E_Fin-E_Sta)/2;
+        #print('Eb='+str(Eb));
+        #print('KRA = %f, E_Sta = %f, E_Fin = %f, Eb = %f' %(KRA, E_Sta, E_Fin, Eb));
         return Eb;
 
     def makeSadd(self,StaInd,FinInd):
-        self.POS['LattPnt'][StaInd] = (self.POS['LattPnt'][StaInd] + \
-                self.POS['LattPnt'][FinInd])/2;
+        self.POS['LattPnt'][StaInd] = list((np.array(self.POS['LattPnt'][StaInd]) + \
+                np.array(self.POS['LattPnt'][FinInd]))/2.0);
         Pnt1 = np.array(self.POS['LattPnt'][StaInd]);
+        #Update the dismat key
         for i in range(self.POS['AtomSum']):
             Pnt2 = np.array(self.POS['LattPnt'][i]);
             PntDis = Pnt1 - Pnt2;
+            #if i == 49:
+            #    print(StaInd,i,PntDis);
+            #Adjust according to periodicity
             for j in range(3):
-                if (PntDis[i]>0.5):
-                    PntDis[i] = 1 - PntDis[i];
-                elif (PntDis[i]<-0.5):
-                    PntDis[i] = PntDis[i] + 1;
+                if (PntDis[j]>0.5):
+                    PntDis[j] = 1 - PntDis[j];
+                elif (PntDis[j]<-0.5):
+                    PntDis[j] = PntDis[j] + 1;
                 else:
-                    PntDis[i] = abs(PntDis[i]);
-            PntDis = np.dot(PntDis,POS['Base']);
-            POS['dismat'][StaInd][i] = math.sqrt(PntDis[0]**2 + \
+                    PntDis[j] = abs(PntDis[j]);
+            PntDis = np.dot(PntDis,self.POS['Base']);
+            self.POS['dismat'][StaInd][i] = math.sqrt(PntDis[0]**2 + \
                     PntDis[1]**2 + PntDis[2]**2);
-            POS['dismat'][StaInd][i] = POS['dismat'][i][StaInd];
+            #if i == 49:
+            #    print('distance:'+str(math.sqrt(PntDis[0]**2 + PntDis[1]**2 + PntDis[2]**2)));
+            self.POS['dismat'][i][StaInd] = self.POS['dismat'][StaInd][i];
 
     def quitSadd(self,StaInd,FinInd):
-        self.POS['LattPnt'][StaInd] = 2.0*self.POS['LattPnt'][StaInd] - \
-                self.POS['LattPnt'][FinInd];
+        self.POS['LattPnt'][StaInd] = list(2.0*np.array(self.POS['LattPnt'][StaInd]) -\
+                np.array(self.POS['LattPnt'][FinInd]));
         Pnt1 = np.array(self.POS['LattPnt'][StaInd]);
         for i in range(self.POS['AtomSum']):
             Pnt2 = np.array(self.POS['LattPnt'][i]);
             PntDis = Pnt1 - Pnt2;
             for j in range(3):
-                if (PntDis[i]>0.5):
-                    PntDis[i] = 1 - PntDis[i];
-                elif (PntDis[i]<-0.5):
-                    PntDis[i] = PntDis[i] + 1;
+                if (PntDis[j]>0.5):
+                    PntDis[j] = 1 - PntDis[j];
+                elif (PntDis[j]<-0.5):
+                    PntDis[j] = PntDis[j] + 1;
                 else:
-                    PntDis[i] = abs(PntDis[i]);
-            PntDis = np.dot(PntDis,POS['Base']);
-            POS['dismat'][StaInd][i] = math.sqrt(PntDis[0]**2 + \
+                    PntDis[j] = abs(PntDis[j]);
+            PntDis = np.dot(PntDis,self.POS['Base']);
+            self.POS['dismat'][StaInd][i] = math.sqrt(PntDis[0]**2 + \
                     PntDis[1]**2 + PntDis[2]**2);
-            POS['dismat'][StaInd][i] = POS['dismat'][i][StaInd];
+            self.POS['dismat'][i][StaInd] = self.POS['dismat'][StaInd][i];
 
     def rateUpdate(self,AtomInd,VacInd):
         '''
@@ -266,15 +302,21 @@ class kmcobj(object):
         for Vackey in self.Reaction:
             if (Vackey == VacInd): #update the rates related to VacInd
                 #Since vacancy is moved, we need to calculate new rates
-                self.RateLst[VacKey] = [];
+                self.RateLst[Vackey] = [];
                 for Atom in self.Reaction[Vackey]:
-                    Eb = self.rateCalcEach(Atom,Vackey);
+                    for i in range(self.POS['EleNum']):
+                        if Atom < sum(self.POS['AtomNum'][0:i]):
+                            AtomLatt = i; break;
+                    Eb = self.rateCalcEach(Atom,Vackey,AtomLatt);
                     Omega0 = self.Fre0*math.exp(-Eb/self.BoltT);
                     self.RateLst[Vackey].append([Atom,Vackey,Omega0]);
             else:
-                if AtomInd in enumerate(self.Reaction):
+                if AtomInd in self.Reaction:
                     Ind = self.Reaction.index(AtomInd);
-                    Eb = self.rateCalcEach(AtomInd,Vackey);
+                    for i in range(self.POS['EleNum']):
+                        if Atom < sum(self.POS['AtomNum'][0:i]):
+                            AtomLatt = i; break;
+                    Eb = self.rateCalcEach(AtomInd,Vackey,AtomLatt);
                     Omega0 = self.Fre0*math.exp(-Eb/self.BoltT);
                     self.RateLst[Vackey][Ind] = \
                             [AtomInd,Vackey,Omega0];
@@ -296,20 +338,20 @@ class kmcobj(object):
         #1. Search the list of reaction for the new Vac position
         self.Reaction[VacInd] = [];
         for Atom in self.AtomIndLst: #Iterate the atom sites
-            if (POS['dismat'][VacInd][Atom] <= self.Radius):
+            if (self.POS['dismat'][VacInd][Atom] <= self.Radius):
                 self.Reaction[VacInd].append(Atom);
         #2. For other vacancy adjacent to AtomInd, it would be a vacancy at that location
         #   instead. So just remove those reactions
         for VacKey in self.Reaction:
             if AtomInd in self.Reaction[VacKey]:
-                if (POS['dismat'][VacKey][AtomInd] > self.Radius):
+                if (self.POS['dismat'][VacKey][AtomInd] > self.Radius):
                     self.Reaction[VacKey].remove(AtomInd);
-            elif (POS['dismat'][VacKey][AtomInd] <= self.Radius):
+            elif (self.POS['dismat'][VacKey][AtomInd] <= self.Radius):
                 self.Reaction[VacKey].append(AtomInd);
 
-        return AtomInd, POS['dismat'][AtomInd][VacInd];
+        return AtomInd, self.POS['dismat'][AtomInd][VacInd];
 
-    def reactionFind(self):
+    def reactionFind(self,IsP=False):
         '''
         Identify the possible reaction pathway
         This version would consider not only 1NN
@@ -319,8 +361,13 @@ class kmcobj(object):
         for Ind in self.VacIndLst:
             self.Reaction[Ind] = [];
             for AtomInd in self.AtomIndLst: #Iterate the atom sites
-                if (POS['dismat'][Ind][AtomInd] <= self.Radius):
+                if (self.POS['dismat'][Ind][AtomInd] <= self.Radius):
                     self.Reaction[Ind].append(AtomInd);
+        if IsP:
+            print('#############################');
+            print('The identified reactions is given below:');
+            print(str(self.Reaction)); #Print the find reactions
+            print('#############################');
 
     def totalRateCalc(self):
         '''
@@ -339,11 +386,13 @@ class kmcobj(object):
         for Vackey in self.Reaction:
             for Ind in range(len(self.RateLst[Vackey])):
                 flag1 = (rdnum>=Ratetmp);
-                flag2 = (rdnum < Ratetmp+RateLst[Vackey][Ind][2]/\
+                flag2 = (rdnum < Ratetmp+self.RateLst[Vackey][Ind][2]/\
                         self.totalRates);
                 if flag1 & flag2 :
                     return self.RateLst[Vackey][Ind][0],self.RateLst[Vackey][Ind][1];
-                Ratetmp += RateLst[Vackey][Ind][2]/self.totalRates;
+                Ratetmp += self.RateLst[Vackey][Ind][2]/self.totalRates;
         print "something must go wrong!!!!";
         print "Ratetmp = %f, rdnum = %f" %(Ratetmp,rdnum);
+
+
 
