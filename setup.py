@@ -10,6 +10,19 @@ def my_test_suite():
     test_suite = test_loader.discover('test', pattern='test_*.py')
     return test_suite
 
+scripts_Clusterkit = ['bin/CECalc',
+                      'bin/CEMC',
+                      'bin/ClusterFind',
+                      'bin/KCEPre',
+                      'bin/nebbarrier.pl',
+                      'bin/nebmovie.pl',
+                      'bin/CEExtract',
+                      'bin/CERegress',
+                      'bin/KCEExtract',
+                      'bin/KMC',
+                      'bin/nebmake.pl',
+                      'bin/nebspline.pl']
+
 here = path.abspath(path.dirname(__file__))
 
 # Get the long description from the README file
@@ -18,7 +31,7 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
 
 setup(
     name = 'Clusterkit',
-    packages = ['Clusterkit'],
+    packages = find_packages(),
     version = '0.1',
     description = 'The code is mainly designed for applying cluster algorithms for description of energetics, measurement of thermodynamic properties and diffusion simulations.',
     long_description=long_description,
@@ -26,9 +39,10 @@ setup(
     author_email = 'jeffrey.oakley.ouyang@gmail.com',
     license='MIT',  # LICENSE.txt
     url = 'https://github.com/Jeff-oakley/Clusterkit', # use the URL to the github repo
-    download_url = 'https://github.com/DallasTrinkle/onsager/tarball/v0.1.tar.gz', # for when we upload
+    download_url = 'https://github.com/Jeff-oakley/Clusterkit/dist/Clusterkit-0.1.tar.gz', # for when we upload
     keywords = ['Cluster algorithm', 'Solid solution', 'Disordered lattice',
                 'Monte Carlo simulation', 'Atomic diffusion'],
+    scripts=scripts_Clusterkit,
     classifiers=[
         # How mature is this project? Common values are
         #   3 - Alpha

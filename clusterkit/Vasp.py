@@ -60,7 +60,7 @@ def posreader(PosName='POSCAR'):
     #The current version does not support reading the POSCAR with velocity information!!!!!!!!!!!!!!!!
     return POS
 
-def poswriter(PosName = 'POSCAR',POS):
+def poswriter(PosName,POS):
     """
     Write out the POS into a POSCAR file
 
