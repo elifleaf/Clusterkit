@@ -1,6 +1,13 @@
 #!/usr/bin/env python
 ##########################################################################
-#Libarary containg all the methods for cluster algorithm
+#Nanokit module for Python
+#Last editted by Dr. Bin Ouyang 2017.02.17
+##########################################################################
+#This is the lib containing all the methods for cluster expansion
+#******dismatcreate: Creating the distance matrix for each pari of atoms
+#******clustercount: Count the number for each cluster
+#******clustergen: Generate random cluster at specific condition
+#******clusterfit: Fit for the cluster coefficient on base of input
 ##########################################################################
 #Format of definition
 #functions are all non-capitalized
@@ -18,10 +25,11 @@ import copy
 import MathKit
 
 
-
-def clustercount(Clusterdes,POS,TS=0.2):
+#######################
+def clustercount1(Clusterdes,POS,TS=0.2):
     '''
-    Enumerate and count clusters in a given lattce
+    enumerate and count clusters in a given lattce, this version is cleaner
+    and more robust than the method below: clustercount
 
     Args:
         Clusterdes: Cluster description, in the format of list, somthing
@@ -67,7 +75,113 @@ def clustercount(Clusterdes,POS,TS=0.2):
                 MathKit.lstGrpAdd(IndLst,IndLstMax,GrpLst);
     return ClusterLst;
 
-def clusterswap(ClusterDes,POS,ClusterLst,Atom1,Atom2,Ind1,Ind2,TS=0.2):
+#######################
+def clustercount(Clusterdes,POS):
+    '''
+    enumerate and count clusters in a given lattce
+
+    Args:
+        Clusterdes: Cluster description, in the format of list, somthing
+                    like [[[0,1,2],[2.6,2.7,2.8]],[[1,1],[2.5]],[[2]]]
+        POS: Dictionary containing the position information, in the format of POSCAR
+        Outputs: Clusterlst, which is a list with all the description of indentified
+                 clusters as specified in Clusterdes
+    '''
+    TS1 = 0.9; TS2 = 1.1; #The range of bond length variation
+    ClusterNum = len(Clusterdes);
+    ClusterLst = [[] for i in range(ClusterNum)]; 
+    for ClusterInd, Cluster in enumerate(Clusterdes): 
+        ClusterSize = len(Cluster[0]); 
+        for Ind0 in range(POS['AtomNum'][Cluster[0][0]]):
+            if (ClusterSize == 1):
+                GInd0 = Ind0 + sum(POS['AtomNum'][0:Cluster[0][0]]);
+                ClusterLst[ClusterInd].append([GInd0]);
+            elif (ClusterSize == 2):
+                for Ind1 in range(POS['AtomNum'][Cluster[0][1]]):
+                    GInd0 = Ind0 + sum(POS['AtomNum'][0:Cluster[0][0]]);
+                    GInd1 = Ind1 + sum(POS['AtomNum'][0:Cluster[0][1]]);
+                    Dis_01 = POS['dismat'][GInd0][GInd1];
+                    if (Dis_01*TS1<Cluster[1][0]) & (Dis_01*TS2>Cluster[1][0]):
+                        #print 'yes';
+                        noexist = 1;
+                        for i in range(len(ClusterLst[ClusterInd])):
+                            if (sorted([GInd0,GInd1])==sorted(ClusterLst[ClusterInd][i])):
+                                noexist = 0;
+                                #print GInd0, GInd1, ClusterLst[ClusterInd][i]
+                        if noexist:
+                            ClusterLst[ClusterInd].append([GInd0,GInd1]);
+                       # Count = Count + 1;
+            elif (ClusterSize ==3):
+                for Ind1 in range(POS['AtomNum'][Cluster[0][1]]):
+                    for Ind2 in range(POS['AtomNum'][Cluster[0][2]]):
+                        GInd0 = Ind0 + sum(POS['AtomNum'][0:Cluster[0][0]]);
+                        GInd1 = Ind1 + sum(POS['AtomNum'][0:Cluster[0][1]]);
+                        GInd2 = Ind2 + sum(POS['AtomNum'][0:Cluster[0][2]]);
+                        Dis_01 = POS['dismat'][GInd0][GInd1];
+                        Dis_02 = POS['dismat'][GInd0][GInd2];
+                        Dis_12 = POS['dismat'][GInd1][GInd2];
+                        #print Dis_01, Dis_02, Dis_03
+                        flag_01 = (Dis_01*TS1<Cluster[1][0]) & \
+                                (Dis_01*TS2>Cluster[1][0]);
+                        flag_02 = (Dis_02*TS1<Cluster[1][1]) & \
+                                (Dis_02*TS2>Cluster[1][1]);
+                        flag_12 = (Dis_12*TS1<Cluster[1][2]) & \
+                                (Dis_12*TS2>Cluster[1][2]);
+                        if (flag_01*flag_02*flag_12):
+                            noexist = 1;
+                            #print "cluster found"
+                            for i in range(len(ClusterLst[ClusterInd])):
+                                if (sorted([GInd0,GInd1,GInd2])==\
+                                        sorted(ClusterLst[ClusterInd][i])):
+                                    noexist = 0;
+                            if noexist:
+                                ClusterLst[ClusterInd].append([GInd0,GInd1,GInd2]);
+                            #Count = Count + 1;
+            elif (ClusterSize == 4):
+                for Ind1 in range(POS['AtomNum'][Cluster[0][1]]):
+                    for Ind2 in range(POS['AtomNum'][Cluster[0][2]]):
+                        for Ind3 in range(POS['AtomNum'][Cluster[0][3]]):
+                            GInd0 = Ind0 + sum(POS['AtomNum'][0:Cluster[0][0]]);
+                            GInd1 = Ind1 + sum(POS['AtomNum'][0:Cluster[0][1]]);
+                            GInd2 = Ind2 + sum(POS['AtomNum'][0:Cluster[0][2]]);
+                            GInd3 = Ind3 + sum(POS['AtomNum'][0:Cluster[0][3]]);
+                            Dis_01 = POS['dismat'][GInd0][GInd1];
+                            Dis_02 = POS['dismat'][GInd0][GInd2];
+                            Dis_03 = POS['dismat'][GInd0][GInd3];
+                            Dis_12 = POS['dismat'][GInd1][GInd2];
+                            Dis_13 = POS['dismat'][GInd1][GInd3];
+                            Dis_23 = POS['dismat'][GInd2][GInd3];
+                            flag_01 = (Dis_01*TS1<Cluster[1][0]) & \
+                                    (Dis_01*TS2>Cluster[1][0]);
+                            flag_02 = (Dis_02*TS1<Cluster[1][1]) & \
+                                    (Dis_02*TS2>Cluster[1][1]);
+                            flag_03 = (Dis_03*TS1<Cluster[1][2]) & \
+                                    (Dis_03*TS2>Cluster[1][2]);
+                            flag_12 = (Dis_12*TS1<Cluster[1][3]) & \
+                                    (Dis_12*TS2>Cluster[1][3]);
+                            flag_13 = (Dis_13*TS1<Cluster[1][4]) & \
+                                    (Dis_13*TS2>Cluster[1][4]);
+                            flag_23 = (Dis_23*TS1<Cluster[1][5]) & \
+                                    (Dis_23*TS2>Cluster[1][5]);
+                            if (flag_01*flag_02*flag_03*flag_12*flag_13*flag_23):
+                                noexist = 1;
+                                #print "cluster found"
+                                for i in range(len(ClusterLst[ClusterInd])):
+                                    if (sorted([GInd0,GInd1,GInd2,GInd3])==\
+                                            sorted(ClusterLst[ClusterInd][i])):
+                                        noexist = 0;
+                                        #print('yes')
+                                if noexist:
+                                    ClusterLst[ClusterInd].append([GInd0,GInd1,GInd2,GInd3]);
+                                #Count = Count + 1;
+            else:
+                print "Okay, I don not know what to do with this cluster \
+                        size "+str(CluserSize);
+    return ClusterLst
+#######################
+
+#######################
+def clusterswap1(ClusterDes,POS,ClusterLst,Atom1,Atom2,Ind1,Ind2,TS=0.2):
     '''
     Update the cluster information after swapping atoms
     This is a cleaner and more robust version of clusterswap method below
@@ -82,13 +196,11 @@ def clusterswap(ClusterDes,POS,ClusterLst,Atom1,Atom2,Ind1,Ind2,TS=0.2):
     ClusterNum = len(ClusterLst);
     SumLst = [sum(POS['AtomNum'][0:i]) for i in range(POS['EleNum'])];
 
-    # Remove clusters with Ind1 from Atom1 and Ind2 from Atom2
     for LstInd, Lst in enumerate(ClusterLst):
         for Ind, AtomInd in enumerate(Lst):
             if (Ind1 in AtomInd) | (Ind2 in AtomInd):
                 ClusterLst[LstInd].remove(AtomInd);
 
-    # Insert the updated clusters related to Ind1 and Ind2
     for CInd, Cluster in enumerate(ClusterDes):
         CSize = len(Cluster[0]);
         if (CSize == 1) & (Atom1 == Cluster[0][0]):
@@ -128,7 +240,122 @@ def clusterswap(ClusterDes,POS,ClusterLst,Atom1,Atom2,Ind1,Ind2,TS=0.2):
                             ClusterLst[CInd].append(list(GIndLst));
                         MathKit.lstGrpAdd(IndLst,IndLstMax,GrpLst);
     return ClusterLst;
+#######################
 
+#######################
+def clusterswap(ClusterDes,POS,ClusterLst,Atom1,Atom2,Ind1,Ind2):
+    '''update the cluster information after swapping atom positionA'''
+    #print Atom1, Atom2, Ind1, Ind2;
+    #TS1 = 0.9; TS2 = 1.1; #The range of bond length variation
+    TS0 = 0.5; #So the length variation of two atoms is within 0.5 A
+    ClusterLstNew = copy.deepcopy(ClusterLst);
+    ClusterNum = len(ClusterLst); #Number of clusters considerred
+
+    AtomSumTab = [sum(POS['AtomNum'][0:i]) for i in range(POS['EleNum'])];
+
+    for LstInd, Lst in enumerate(ClusterLst):
+        for Ind, AtomInd in enumerate(Lst):
+            if (Ind1 in AtomInd) | (Ind2 in AtomInd):
+                ClusterLstNew[LstInd].remove(AtomInd);
+    ClusterLst = copy.deepcopy(ClusterLstNew);
+    for ClusterInd, Cluster in enumerate(ClusterDes):
+        ClusterSize = len(Cluster[0]);
+        if ((ClusterSize == 1)&(Atom1 == Cluster[0][0])):
+            ClusterLst[ClusterInd].append([Ind1]);
+        elif ((ClusterSize == 1)&(Atom2 == Cluster[0][0])):
+            ClusterLst[ClusterInd].append([Ind2]);
+        elif (ClusterSize == 2):
+            for AtomI, Atom in enumerate([Atom1, Atom2]):
+                if Atom in Cluster[0]:
+                    OccLst = [i for i,val in enumerate(Cluster[0]) if val==Atom];
+                    IndSite0 = [Ind1,Ind2][AtomI] - AtomSumTab[Atom];
+                    SiteOrd = list(Cluster[0]);
+                    Sites = list(SiteOrd); Sites.remove(Atom);
+                    Site1 = Sites[0];
+                    IndOrd = ['IndS1']; IndOrd.insert(OccLst[0],'IndSite0');
+                    for IndS1 in range(POS['AtomNum'][Site1]):
+                        GIndS0 = eval(IndOrd[0]) + AtomSumTab[SiteOrd[0]];
+                        GIndS1 = eval(IndOrd[1]) + AtomSumTab[SiteOrd[1]];
+                        Dis_01 = POS['dismat'][GIndS0][GIndS1];
+                        if (Dis_01-TS0<Cluster[1][0]) & (Dis_01+TS0>Cluster[1][0]):
+                            noexist = 1;
+                            for i in range(len(ClusterLst[ClusterInd])):
+                                if (sorted([GIndS0,GIndS1])==\
+                                        sorted(ClusterLst[ClusterInd][i])):
+                                    noexist = 0;
+                            if noexist:
+                                ClusterLst[ClusterInd].append([GIndS0,GIndS1]);
+        elif (ClusterSize == 3):
+            IsCount = 0; IsSort = 0;
+            for AtomI, Atom in enumerate([Atom1, Atom2]):
+                if Atom in Cluster[0]:
+                    OccLst = [i for i,val in enumerate(Cluster[0]) if val==Atom];
+                    if len(OccLst) > 1:
+                        IsSort = '';
+                        for Occ in range(3):
+                            if Occ in OccLst:
+                                IsSort+='1';
+                            else:
+                                IsSort+='2';
+                        IsSort = int(IsSort);
+                    IndSite0 = [Ind1,Ind2][AtomI] - AtomSumTab[Atom];
+                    SiteOrd = list(Cluster[0]); 
+                    Sites = list(SiteOrd); Sites.remove(Atom);
+                    Site1, Site2 = Sites[0], Sites[1];
+                    IndOrd = ['IndS1','IndS2']; IndOrd.insert(OccLst[0],'IndSite0');
+                    IsCount = 1;
+                if (IsCount == 1):
+                    for IndS1 in range(POS['AtomNum'][Site1]):
+                        for IndS2 in range(POS['AtomNum'][Site2]):
+                            GIndS0 = eval(IndOrd[0]) + AtomSumTab[SiteOrd[0]];
+                            GIndS1 = eval(IndOrd[1]) + AtomSumTab[SiteOrd[1]];
+                            GIndS2 = eval(IndOrd[2]) + AtomSumTab[SiteOrd[2]];
+                            Dis_01 = POS['dismat'][GIndS0][GIndS1];
+                            Dis_02 = POS['dismat'][GIndS0][GIndS2];
+                            Dis_12 = POS['dismat'][GIndS1][GIndS2];
+                            if (IsSort == 0):
+                                Dis=[Dis_01,Dis_02,Dis_12];
+                                ClusterDis = [Cluster[1][0],Cluster[1][1],\
+                                        Cluster[1][2]];
+                            elif (IsSort == 111):
+                                Dis=sorted([Dis_01,Dis_02,Dis_12]);
+                                ClusterDis = sorted([Cluster[1][0],Cluster[1][1],\
+                                        Cluster[1][2]]);
+                            elif (IsSort == 112):
+                                Dis = sorted([Dis_02,Dis_12]);
+                                Dis.insert(0,Dis_01);
+                                ClusterDis = sorted([Cluster[1][1],Cluster[1][2]]);
+                                ClusterDis.insert(0,Cluster[1][0]);
+                            elif (IsSort == 121):
+                                Dis = sorted([Dis_01,Dis_12]);
+                                Dis.insert(1,Dis_02);
+                                ClusterDis = sorted([Cluster[1][0],Cluster[1][2]]);
+                                ClusterDis.insert(1,Cluster[1][1]);
+                            elif (IsSort == 211):
+                                Dis = sorted([Dis_01,Dis_02]);
+                                Dis.append(Dis_12);
+                                ClusterDis = sorted([Cluster[1][0],Cluster[1][1]]);
+                                ClusterDis.append(Cluster[1][2]);
+                            flag_01 = (Dis[0]-TS0<ClusterDis[0]) & \
+                                    (Dis[0]+TS0>ClusterDis[0]);
+                            flag_02 = (Dis[1]-TS0<ClusterDis[1]) & \
+                                    (Dis[1]+TS0>ClusterDis[1]);
+                            flag_12 = (Dis[2]-TS0<ClusterDis[2]) & \
+                                    (Dis[2]+TS0>ClusterDis[2]);
+                            if (sum([flag_01,flag_02,flag_12]) == 3):
+                                noexist = 1;
+                                for i in range(len(ClusterLst[ClusterInd])):
+                                    if (sorted([GIndS0,GIndS1,GIndS2])==\
+                                            sorted(ClusterLst[ClusterInd][i])):
+                                        noexist = 0;
+                                if noexist:
+                                    ClusterLst[ClusterInd].append([GIndS0,GIndS1,GIndS2]);
+        elif (ClusterSize == 4):
+            print "We cannot deal with cluster size large than 4!!!!!!"
+    return ClusterLst;
+#######################
+
+#######################
 def clusterinsert(ClusterDes,ClusterLst,Atom1,Atom2,Ind1,Ind2):
     '''
     Update the cluster information after insert atom position
@@ -138,10 +365,10 @@ def clusterinsert(ClusterDes,ClusterLst,Atom1,Atom2,Ind1,Ind2):
         for i in range(Ind2,Ind1):
             clusterswap(dismat,i,Ind1);
     elif (Ind1 < Ind2):
-        #print Ind1,Ind2
         for i in range(Ind2,Ind1,-1):
             clusterswap(dismat,i,Ind1);
     return ClusterLst;
+#######################
 
 #######################
 #def clustergen(ClusterDes,POSBase,AtomNum):
@@ -195,19 +422,18 @@ def clusterinsert(ClusterDes,ClusterLst,Atom1,Atom2,Ind1,Ind2):
 #    return POS
 #######################
 
+#######################
 def clusterRandom(POS,AtomNum,AtomName):
-    '''
-    The POSBase dictionary should take a different format from regular POS.It should
-    be read from a POSCAR file for sure, but the poscar file should only distinguish
-    different sublattice. Therefore the generation will decide the arrangement of >=1
-    types of atoms in one lattice.
-    The AtomNum will give the number of elements and atoms we need for each atomic type
-    For example, [[16,16],[16,16],[31,1]] tells that we need two types of atoms for each
-    sublattice while for the 1st and second sublattice there will be 16 atoms each. The
-    third sublattice will have 31 and 1 of two types of atoms.
-    '''
+    '''The POSBase dictionary should take a different format from regular POS.It should
+       be read from a POSCAR file for sure, but the poscar file should only distinguish
+       different sublattice. Therefore the generation will decide the arrangement of >=1
+       types of atoms in one lattice.
+       The AtomNum will give the number of elements and atoms we need for each atomic type
+       For example, [[16,16],[16,16],[31,1]] tells that we need two types of atoms for each
+       sublattice while for the 1st and second sublattice there will be 16 atoms each. The
+       third sublattice will have 31 and 1 of two types of atoms.'''
     NewAtomNum = []; NewAtomInd = []; NewLattPnt = [];
-    for i, NumLst in enumerate(AtomNum): #Allocate atoms for each sublattice
+    for i, NumLst in enumerate(AtomNum):
         AtomPre = sum(POS['AtomNum'][0:i]);
         AtomLst = range(AtomPre,AtomPre+POS['AtomNum'][i]);
         for ind,Num in enumerate(NumLst):
@@ -215,7 +441,7 @@ def clusterRandom(POS,AtomNum,AtomName):
             NewAtomNum.append(Num); NewAtomInd.append(AtomLstPart);
             for Atom in AtomLstPart:
                 AtomLst.remove(Atom);
-    # Finish the NewLattPnt
+    #print NewAtomNum, NewAtomInd
     for i, AtomLst in enumerate(NewAtomInd):
         for j in range(len(AtomLst)):
             #print i, NewAtomNum, AtomNum
@@ -225,6 +451,7 @@ def clusterRandom(POS,AtomNum,AtomName):
     POS['AtomNum'] = NewAtomNum[:]; POS['LattPnt'] = NewLattPnt[:];
     POS['EleName'] = AtomName[:]; POS['AtomSum'] = sum(POS['AtomNum']);
     POS['EleNum'] = len(POS['AtomNum']);
+    #print POS['AtomNum'], POS['AtomSum']
     # Allocate sublattice just incase
     flag = 0;
     for i in range(len(POS['AtomNum'])):
@@ -239,7 +466,9 @@ def clusterRandom(POS,AtomNum,AtomName):
         if(i!=POS['EleNum']-1):
             POS['SubLatt'].append([[]])
     return POS
+#######################
 
+#######################
 def clusterE(ClusterLst,ClusterCoef):
     '''
     Calculate total energy
@@ -248,13 +477,21 @@ def clusterE(ClusterLst,ClusterCoef):
         ClusterLst: List of indentified clusters
         ClusterCoef: ECI of each cluster
     '''
+    #ClusterCount = [];
+    #for i in range(len(ClusterLst)):
+    #    ClusterCount.append(len(ClusterLst[i]));
     ClusterCount = countCluster(ClusterLst);
+    #print ClusterCount,ClusterCoef, len(ClusterCount), len(ClusterCoef);
     ECE = 0.0;
     ECE = ECE + ClusterCoef[0];
+    #print ECE;
     for i in range(len(ClusterCount)):
         ECE = ECE + ClusterCount[i]*ClusterCoef[i+1];
+        #print ECE
     return ECE
+#######################
 
+#######################
 def dismatswap(dismat,Ind1,Ind2):
     '''
     Update the distance matrix
@@ -263,36 +500,38 @@ def dismatswap(dismat,Ind1,Ind2):
         dismat: distance matrix
         Ind1, Ind2: the indexes of two atoms that swap positions
     '''
-    #update the distance matrix after swapping positions
     lendismat = len(dismat[1]);
-    #Change all the neighbors of Ind1 and Ind2
     tmp = dismat[Ind1][:];
     dismat[Ind1][:] = dismat[Ind2][:];
     dismat[Ind2][:] = tmp;
-    #Update all the neighbors with Ind1 and Ind2 (avoid double counting)
     for i in range(len(dismat[1])):
         if (i!=Ind1)&(i!=Ind2):
             dismat[i][Ind1] = dismat[Ind1][i];
             dismat[i][Ind2] = dismat[Ind2][i];
-    #Swap back the diagonal part
     tmp = dismat[Ind1][Ind2];
     dismat[Ind1][Ind2] = dismat[Ind1][Ind1];
     dismat[Ind1][Ind1] = tmp;
     tmp = dismat[Ind2][Ind1];
     dismat[Ind2][Ind1] = dismat[Ind2][Ind2];
     dismat[Ind2][Ind2] = tmp;
-    return dismat;
 
+    return dismat;
+#######################
+
+#######################
 def dismatinsert(dismat,Ind1,Ind2):
-    #update the distance matrix after insert ith atom into IndFin2
     if (Ind1 > Ind2):
         for i in range(Ind2,Ind1):
             dismatswap(dismat,i,Ind1);
     elif (Ind1 < Ind2):
+        #print Ind1,Ind2
         for i in range(Ind2,Ind1,-1):
             dismatswap(dismat,i,Ind1);
     return dismat;
+#######################
 
+
+#######################
 def ceFit(Energy,ClusterCount):
     '''
     Least square fitting
@@ -302,7 +541,6 @@ def ceFit(Energy,ClusterCount):
         ClusterCount: Cluster analaysis results, number of each clusters
         EffInd: Effective cluster index
     '''
-    #Perform CE fitting, a list with CE Coeffcient will be returned
     #ClusterCount = countCluster(ClusterLst)
     Energy = np.array(Energy);
     ClusterCount = np.array(ClusterCount);
@@ -310,24 +548,30 @@ def ceFit(Energy,ClusterCount):
     A = np.hstack([ClusterCount,OneMat]);
     FitResult = np.linalg.lstsq(A,Energy);
     CECoeff = FitResult[0];
-    #Put the Constant part as the first element
     CECoeff = CECoeff.tolist(); CECoeffLen = len(CECoeff);
     Const = CECoeff[CECoeffLen-1];CECoeff = CECoeff[0:CECoeffLen-1]; 
     CECoeff.insert(0,Const);
     return CECoeff
+#######################
 
+#######################
 def countCluster(ClusterLst):
     ClusterCount = [];
     for i in range(len(ClusterLst)):
+        #print('ClusterLst='+str(ClusterLst[i]))
         ClusterCount.append(len(ClusterLst[i]));
     return ClusterCount
+#######################
 
+#######################
 def rmseCalc(Energy,Energy_Pre):
     Energy = np.array(Energy); Energy_Pre = np.array(Energy_Pre);
     RMSE = np.sqrt(np.mean((Energy_Pre-Energy)**2));
 
     return RMSE
+#######################
 
+#######################
 def cvEvaluate(Energy,ClusterLst):
     ClusterCount = countCluster(ClusterLst);
     CVError = np.array([]);
@@ -342,7 +586,9 @@ def cvEvaluate(Energy,ClusterLst):
     CVError = list(CVError);
 
     return CVError, CVScore;
+#######################
 
+#######################
 def ceFind(SubLatt,POSRef,NCut=3,Isprint=0,DCut='default'):
     '''
     Method to find the clusters with a given reference lattice
@@ -356,7 +602,6 @@ def ceFind(SubLatt,POSRef,NCut=3,Isprint=0,DCut='default'):
               (default: Half of the box size)
     '''
     print('#############################################################');
-    ###Initialization of variables
     if DCut == 'default':
         DCut = 100.0; TS = 0.3;
         for i in range(3):
@@ -368,7 +613,6 @@ def ceFind(SubLatt,POSRef,NCut=3,Isprint=0,DCut='default'):
     PrimDistLst = []; AllPrimLattLst = [];
     ClusterNum = []; IndMax = max(SubLatt[-1]);
 
-    ###Find the free sublattice due to formation of solid solution
     FreeSubLatt = []; FreePrim = [];
     for i in range(NSubLatt):
         if len(SubLatt[i]) > 1:
@@ -378,7 +622,6 @@ def ceFind(SubLatt,POSRef,NCut=3,Isprint=0,DCut='default'):
     FreePrim = np.array(FreePrim); FreeSubLatt = np.array(FreeSubLatt);
     #print(NFreePrim,NFreeSubLatt,FreePrim,FreeSubLatt);
 
-    ### Find all the DisLst in prim cell
     for N in range(2,NCut+1):
         PrimIndLst = [0]*N;
         PrimDistLst.append([]); AllPrimLattLst.append([]);
@@ -392,7 +635,6 @@ def ceFind(SubLatt,POSRef,NCut=3,Isprint=0,DCut='default'):
     print('The Distance list of primary lattice is '+str(PrimDistLst));
     print('The cluster made from primary lattice is '+str(AllPrimLattLst));
 
-    ### Find all the clusters in solid solution
     ClusterDesLst.append([]); ClusterNum.append(0);
     for SubLatt in FreeSubLatt:
         if SubLatt:
@@ -407,7 +649,7 @@ def ceFind(SubLatt,POSRef,NCut=3,Isprint=0,DCut='default'):
         ClusterDesLst.append([]); ClusterNum.append(0);
         while (IndLst[-1]<=NFreeSubLatt-1):
             LattLst = list(FreeSubLatt[IndLst]);
-            if not [] in LattLst: #do not need to count for empty cases
+            if not [] in LattLst:
                 #print('LattLst = '+str(LattLst));
                 PrimLattLst = [0]*N;
                 for LattInd, Latt in enumerate(LattLst):
@@ -434,7 +676,6 @@ def ceFind(SubLatt,POSRef,NCut=3,Isprint=0,DCut='default'):
     ClusterSum = sum(ClusterNum);
     print('#############################################################');
 
-    ### Print the search results
     if (Isprint):
         print('#############################################################');
         print('%i indepedent Clusters have been found in this structure' %(ClusterSum));
@@ -447,7 +688,9 @@ def ceFind(SubLatt,POSRef,NCut=3,Isprint=0,DCut='default'):
         print('#############################################################');
 
     return ClusterSum,ClusterNum,ClusterDesLst;
+#######################
 
+#######################
 def findCluster(POSRef,LattLst,DCut):
     '''
     Find the Distance Lst for a given PrimAtomLst
@@ -488,7 +731,9 @@ def findCluster(POSRef,LattLst,DCut):
         IndLst = MathKit.lstGrpAdd(IndLst,IndLstMax,GrpLst);
 
     return DistLst;
+#######################
 
+#######################
 def ceAtomFind(SubLatt,POSRef,AtomLatt,AtomInd,NCut=2,Isprint=0,DCut='default'):
     '''
     Method to find the clusters with a given reference lattice, we only
@@ -503,7 +748,6 @@ def ceAtomFind(SubLatt,POSRef,AtomLatt,AtomInd,NCut=2,Isprint=0,DCut='default'):
               (default: Half of the box size)
     '''
     print('#############################################################');
-    ###Initialization of variables
     if DCut == 'default':
         DCut = 100.0; TS = 0.3;
         for i in range(3):
@@ -518,7 +762,6 @@ def ceAtomFind(SubLatt,POSRef,AtomLatt,AtomInd,NCut=2,Isprint=0,DCut='default'):
     for i in range(POSRef['EleNum']):
         EffPntLst.append([]);
 
-    ###Find the free sublattice due to formation of solid solution
     FreeSubLatt = []; FreePrim = [];
     for i in range(NSubLatt):
         if len(SubLatt[i]) > 1:
@@ -529,7 +772,6 @@ def ceAtomFind(SubLatt,POSRef,AtomLatt,AtomInd,NCut=2,Isprint=0,DCut='default'):
     NFreePrim = len(FreePrim); NFreeSubLatt = len(FreeSubLatt);
     FreePrim = np.array(FreePrim); FreeSubLatt = np.array(FreeSubLatt);
 
-    ### Find all the DistLst in prim cell
     for N in range(2,NCut+1):
         PrimIndLst = [0]*(N-1);
         PrimDistLst.append([]); AllPrimLattLst.append([]);
@@ -547,7 +789,6 @@ def ceAtomFind(SubLatt,POSRef,AtomLatt,AtomInd,NCut=2,Isprint=0,DCut='default'):
     print('DistLst found as: %s' %(str(DistLst)));
     print('EffPntLst found as: %s' %(EffPntLst))
     
-    ### Output the effective cluster
     POSCluster = copy.deepcopy(POSRef);
     del POSCluster['dismat'];
     POSCluster['EleName'] = []; POSCluster['AtomNum']=[]; 
@@ -566,8 +807,6 @@ def ceAtomFind(SubLatt,POSRef,AtomLatt,AtomInd,NCut=2,Isprint=0,DCut='default'):
     vp.poswriter('./POSCAR_EffCluster',POSCluster);
     print("Effective cluster writen into POSCAE_EffCluster");
 
-
-    ### Find all the clusters in solid solution
     VacLatt = SubLatt[AtomLatt][-1];
     #print('VacInd = %i' %VacInd);
     for N in range(2,NCut+1):
@@ -603,7 +842,6 @@ def ceAtomFind(SubLatt,POSRef,AtomLatt,AtomInd,NCut=2,Isprint=0,DCut='default'):
     KClusterSum = sum(KClusterNum);
     print('#############################################################');
 
-    ### Print the search results
     if (Isprint):
         print('#############################################################');
         print('%i indepedent Clusters have been found in this structure' %(KClusterSum));
@@ -616,7 +854,9 @@ def ceAtomFind(SubLatt,POSRef,AtomLatt,AtomInd,NCut=2,Isprint=0,DCut='default'):
         print('#############################################################');
 
     return EffPntLst,KClusterSum,KClusterNum,KClusterDesLst;
+#######################
 
+#######################
 def findAtomCluster(POSRef,LattLst,AtomLatt,AtomInd,DCut):
     '''
     Find the Distance Lst for a given PrimAtomLst
@@ -657,7 +897,6 @@ def findAtomCluster(POSRef,LattLst,AtomLatt,AtomInd,DCut):
         flag = 1;
         if GIndLst[1] == 50:
             print('Atom50: %s' %str(Dist));
-        #Check if Dist already exist in DistLst
         for Disttmp in DistLst:
             Distmp = MathKit.grpSort(Disttmp,PermuteGrpLst);
             DistDiff = sum(abs(np.array(Dist)-np.array(Disttmp)));
@@ -676,4 +915,5 @@ def findAtomCluster(POSRef,LattLst,AtomLatt,AtomInd,DCut):
         LattLst.remove(LattLst[0]); GIndLst.remove(GIndLst[0]);
 
     return EffLst,DistLst
+#######################
 

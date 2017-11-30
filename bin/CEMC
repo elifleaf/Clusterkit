@@ -1,6 +1,10 @@
 #!/usr/bin/env python
 #######################################################################
 # Script for cluster expansion monte carlo
+# What's new: add two out put
+# 1. Output the sampled energetics as well as cluster efficient
+# 2. Output the sampled atomic structure
+# 3. Those codes blocks for debugging are removed
 #######################################################################
 
 import os
@@ -11,8 +15,6 @@ import argparse
 import copy
 import time
 import math
-
-__author__ = 'Bin Ouyang';
 
 parser = argparse.ArgumentParser(description = 'Script for running CEMC.');
 parser.add_argument('-des', action='store', dest="ClusterDes", required=True, \
@@ -32,6 +34,8 @@ parser.add_argument('--ini', action='store', dest="InitConf", default="POSCAR_Pr
         help='Starting Configuration (default: POSCAR_Primary)');
 options=parser.parse_args();
 
+
+__author__ = 'Bin Ouyang';
 
 ClusterDes = eval(options.ClusterDes); ClusterCoef = eval(options.ClusterCoef);
 Temp = eval(options.Temp); InitConf = options.InitConf;
@@ -62,6 +66,9 @@ for i in range(5):
 # Start the loop of Monte Carlo Simulations
 ### In the current version of code, the the sublatt key will not be updated.
 ClusterLst0 = CELib.clustercount(ClusterDes,POS);
+#Fid = open(Etrack,'a'); #Keep track of the energy evolution (succesful trials)
+#Fid1 = open(Rdtrack,'a'); #Keep track of swap trial
+#Fid2 = open(Ealltrack,'a'); #Keep track of all energy (all trials)
 E0 = CELib.clusterE(ClusterLst0,ClusterCoef);
 print "E0 = "+str(E0);
 Count = 0; #Count succesful steps
@@ -126,6 +133,7 @@ for i in range(NPeriod):
         if Countall%StrStep == 0:
             vp.poswriter('./ConfDir/POSCAR_Step'+str(Countall),POS);
     vp.poswriter('./POSCAR_Fin',POS);
+#Fid.close(); Fid1.close(); Fid2.close();
 fin = time.time();
 UsedTime = fin - start;
 print "Time elapsed is "+str(UsedTime)+" s";

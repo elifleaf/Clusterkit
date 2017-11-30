@@ -10,6 +10,12 @@ def my_test_suite():
     test_suite = test_loader.discover('test', pattern='test_*.py')
     return test_suite
 
+packages_phonopy = ['clusterkit',
+                    'clusterkit/CELib',
+                    'clusterkit/KMCLib',
+                    'clusterkit/MathKit',
+                    'clusterkit/Vasp.py'];
+
 scripts_Clusterkit = ['bin/CECalc',
                       'bin/CEMC',
                       'bin/ClusterFind',

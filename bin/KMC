@@ -14,7 +14,7 @@
 
 import os
 import Vasp as vp
-import KMCLib
+import KMCLib,CELib
 import numpy as np
 import random as rd
 import argparse
@@ -42,6 +42,8 @@ parser.add_argument('--ini', action='store', dest="InitConf", default="POSCAR_Pr
         help='Starting Configuration (default: POSCAR_Primary)');
 parser.add_argument('--ref', action='store', dest="Ref", default="POSCAR_Ref", \
         help='Reference configuration for vacancy indentification (default: POSCAR_Ref)');
+parser.add_argument('--IsNew', action='store', dest="IsNew", default=1, \
+        help='If this is a new calculation (default: 1)')
 options=parser.parse_args();
 
 ###Initilization of enviromental variables
@@ -49,6 +51,7 @@ ClusterDes = eval(options.ClusterDes); ClusterCoef = eval(options.ClusterCoef);
 KClusterDes = eval(options.KClusterDes); KClusterCoef = eval(options.KClusterCoef);
 Temp = float(options.Temp); SiteLst = eval(options.Sitelst); Radius = float(options.Radius); 
 Fre0 = float(options.Fre0); InitConf = options.InitConf; Ref = options.Ref; 
+IsNew = int(options.IsNew);
 BoltT = Temp*8.6173303e-5; #KbT
 
 #print Temp, Temp+1
@@ -58,7 +61,7 @@ print "BoltT is set as", BoltT, "eV";
 ###Standard KMC set up
 start = time.time();
 NPeriod = 20; # number of period, check after each period
-NSteps = 500; # number of steps in each period
+NSteps = 8000; # number of steps in each period
 EDiff = 0.01;
 #print start;
 
@@ -82,22 +85,44 @@ KMCSim0.rateCalc(); #Initiate the rates for each reactions
 print(KMCSim0); #Print the information of simulator
 
 ####Start the random walking
+if IsNew:
+    Fid1 = open('Trace.dat','w');
+    Fid1.write('Diffusiontime\tAtomic displacement list\n');
+    Fid1.close();
+    KMCSim0.writeTrajectory('Trajectory.xyz','w');
 Nstep = 0;
 for i in range(NPeriod):
     for j in range(NSteps):
         rdnum = rd.uniform(0,1);
         [AtomInd,VacInd] = KMCSim0.findEvent(rdnum);
+        ###Swap the position since diffusion happens
+        tmp = KMCSim0.POS['LattPnt'][AtomInd];
+        KMCSim0.POS['LattPnt'][AtomInd] = KMCSim0.POS['LattPnt'][VacInd];
+        KMCSim0.POS['LattPnt'][VacInd] = tmp;
+        KMCSim0.POS['dismat']  = CELib.dismatswap(KMCSim0.POS['dismat'],AtomInd,VacInd);
+        ###Swap the position since diffusion happens
         rdnum = rd.uniform(0,1);
         KMCSim0.diffusetime += -math.log(rdnum) / KMCSim0.totalRates * 1.0e15;
         OldPOS = copy.deepcopy(KMCSim0.POS);
         [Ind,Dist]=KMCSim0.reactionUpdate(AtomInd,VacInd);
         DistTab[Ind] += Dist;
         KMCSim0.rateUpdate(AtomInd,VacInd);
+        ###I/O
+        Fid1 = open('Trace.dat','a');
+        Fid1.write('%f\t' %KMCSim0.diffusetime);
+        for AInd in range(POS['AtomSum']):
+            Fid1.write('%f\t' %DistTab[AInd]);
+        Fid1.write('\n');
+        Fid1.close();
+        KMCSim0.writeTrajectory();
+        ###I/O
         print('KMCSim0.totalRates = %f ' %KMCSim0.totalRates);
         print('Jump Distance = %f A' %Dist);
         print('Diffusion time = %f fs' %KMCSim0.diffusetime);
         Nstep += 1;
         print('Nstep = %i' %Nstep);
+Fid1.close();
+
 
 fin = time.time();
 UsedTime = fin - start;
