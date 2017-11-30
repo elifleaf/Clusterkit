@@ -1,0 +1,73 @@
+#!/usr/bin/env python
+#######################################################################
+# Script for extract the energetics and cluster information
+#######################################################################
+
+__author__ = 'Bin Ouyang'
+import os
+import Vasp as vp
+import numpy as np
+import argparse,textwrap
+import matplotlib as mpl
+import math
+mpl.use('Agg')
+import matplotlib.pyplot as plt
+
+parser = argparse.ArgumentParser(description = 'Script for extracting the DOSCAR.',
+        formatter_class=argparse.RawTextHelpFormatter);
+parser.add_argument('--KF', action='store', dest="KMCOutFile", default="Trace.dat", \
+        help='Tell file of KMC simulation results (default: Trace.dat)');
+parser.add_argument('--P', action='store', dest="POSFile", default="POSCAR_Primary", \
+        help='Initial configruation for KMC simulation (default: POSCAR_Primary)');
+parser.add_argument('--O', action='store', dest="OutFile", default="Diffusion.dat", \
+        help='Output the processed diffusion results (default: Diffusion.dat)');
+options=parser.parse_args();
+
+#Arguments set up
+KMCOutFile = options.KMCOutFile; 
+POSFile = options.POSFile; OutFile = options.OutFile;
+POSPrim = vp.posreader(POSFile);
+
+TLst = []; DistMat = [];
+Fid = open(KMCOutFile,'r');
+Comment = Fid.readline(); #Comment line
+### Read the diffusion results
+while 1:
+    Line = Fid.readline(); 
+    if not Line:
+        print('%s reading completed' %KMCOutFile)
+        break;
+    SLine = Line.split();
+    TLst.append(float(SLine[0]));
+    CDist = [float(SLine[i+1]) for i in range(POSPrim['AtomSum'])];
+    DistMat.append(CDist);
+Fid.close();
+NStep = len(TLst);
+
+### Calculate jump diffusion coeffcient and tracer diffusion coeffcient
+DistArry = np.array(DistMat);
+D_j = []; D_t = [];
+for i in range(NStep):
+    D1 = math.log10(1.0/6/TLst[i]*(sum(DistArry[i])**2)/POSPrim['AtomSum']/10) #Jump frequency
+    D_j.append(D1);
+    D2 = math.log10(1.0/6/TLst[i]*sum((DistArry[i]**2))/POSPrim['AtomSum']/10) #Tracer frequency
+    D_t.append(D2);
+
+### Visualize the two types of coefficient
+fig = plt.figure(figsize=(6,6)); #Create new graph
+D_j_Line = plt.plot(TLst,D_j);
+plt.setp(D_j_Line, color = 'k', linewidth = 3.0);
+D_t_Line = plt.plot(TLst,D_t);
+plt.setp(D_t_Line, color = 'r', linewidth = 3.0);
+fig.savefig('./Diff_Time.png');
+try:
+    plt.close();
+except AttributeError, e:
+    pass
+
+### Output the results
+Fid=open(OutFile,'w');
+for i in range(NStep):
+    if i%100 == 0:
+        Fid.write('%f\t%f\t%f\n' %(i,D_j[i],D_t[i]));
+Fid.close();
